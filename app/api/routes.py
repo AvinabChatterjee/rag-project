@@ -40,12 +40,23 @@ class AskRequest(BaseModel):
     )
 
 
+class AnalystOutput(BaseModel):
+    final_answer: str | None = None
+    error_message: str | None = None
+    confidence: str | None = None
+
+
 class AskResponse(BaseModel):
     workflow_id: str
     status: str
     question: str
     data_folder: str
     available_files: list[AvailableFile]
+    route: str | None = None
+    selected_file_path: str | None = None
+    answer: str | None = None
+    error: str | None = None
+    analyst_output: AnalystOutput | None = None
     message: str
 
 
@@ -96,11 +107,22 @@ async def ask(request: AskRequest) -> AskResponse:
         for file_info in final_state.get("available_files", [])
     ]
 
+    analyst_raw = final_state.get("analyst_output") or {}
+    analyst_output = AnalystOutput(**analyst_raw) if analyst_raw else None
+
     return AskResponse(
         workflow_id=final_state["workflow_id"],
         status=final_state["status"],
         question=final_state["user_question"],
         data_folder=final_state["data_folder"],
         available_files=available_files,
-        message="Workflow initialized. Agents not wired yet (Phase 2+).",
+        route=final_state.get("route"),
+        selected_file_path=final_state.get("selected_file_path"),
+        answer=analyst_raw.get("final_answer"),
+        error=analyst_raw.get("error_message"),
+        analyst_output=analyst_output,
+        message=(
+            f"Workflow completed via {final_state.get('route', 'unknown')} route "
+            "(Phase 2 stubs)."
+        ),
     )
