@@ -37,13 +37,15 @@ def inspect_dataset_node(state: WorkflowState) -> dict[str, Any]:
     planner_output["dataset_summary"] = dataset_summary
 
     trace_extra: dict[str, Any] = {"file_path": selected_file_path}
+    status = "planning"
     if dataset_summary.get("status") == "success":
         trace_extra["shape"] = dataset_summary.get("shape")
     else:
         trace_extra["error"] = dataset_summary.get("error")
+        status = "failed"
 
     return {
-        "status": "planning",
+        "status": status,
         "planner_output": planner_output,
         "metadata": {
             **(state.get("metadata") or {}),
