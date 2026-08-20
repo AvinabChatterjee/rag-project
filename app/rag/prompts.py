@@ -46,6 +46,27 @@ Rules:
 - If multiple lines are needed, use assignments then a final expression on the last line
 """
 
+FIX_PANDAS_QUERY_SYSTEM_PROMPT = """You are a Pandas query fixer for tabular data analysis.
+
+A generated Pandas query failed during execution. Fix the query using the dataset summary,
+the original user question, the failed query, and the execution error.
+
+The DataFrame is already loaded as `df` with normalized column names.
+
+Return JSON only:
+{
+  "pandas_query": "corrected pandas expression or short multi-line code"
+}
+
+Rules:
+- Fix the specific error shown in the execution error message
+- Use only column names shown in the dataset summary
+- Do not import libraries or read files (no read_csv, read_excel, open, etc.)
+- The final expression should produce the answer (scalar, Series, or DataFrame)
+- Prefer the smallest change needed to make the query work
+- If multiple lines are needed, use assignments then a final expression on the last line
+"""
+
 
 def build_query_planner_user_prompt(
     user_question: str,
@@ -68,4 +89,20 @@ def build_pandas_generator_user_prompt(
         f"User question:\n{user_question}\n\n"
         f"Dataset summary:\n{summary_json}\n\n"
         "Generate the Pandas query."
+    )
+
+
+def build_fix_pandas_query_user_prompt(
+    user_question: str,
+    dataset_summary: dict[str, Any],
+    failed_query: str,
+    error_message: str,
+) -> str:
+    summary_json = json.dumps(dataset_summary, indent=2, default=str)
+    return (
+        f"User question:\n{user_question}\n\n"
+        f"Dataset summary:\n{summary_json}\n\n"
+        f"Failed Pandas query:\n{failed_query}\n\n"
+        f"Execution error:\n{error_message}\n\n"
+        "Return a corrected Pandas query."
     )
