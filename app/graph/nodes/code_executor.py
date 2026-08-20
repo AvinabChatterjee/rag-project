@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.graph.state import WorkflowState
+from app.tools.dataframe_tools import run_query_data
 
 
 def _append_trace(state: WorkflowState, node: str, **extra: Any) -> list[dict[str, Any]]:
@@ -18,22 +19,36 @@ def _append_trace(state: WorkflowState, node: str, **extra: Any) -> list[dict[st
 
 
 def code_executor_node(state: WorkflowState) -> dict[str, Any]:
-    """
-    Agent 2 stub — simulates a successful Pandas run until Phase 4.
-
-    Increments execution_attempts and writes a placeholder execution_result.
-    """
+    """Agent 2 — execute generated Pandas code on the selected tabular file."""
     attempts = state.get("execution_attempts", 0) + 1
     planner_output = state.get("planner_output") or {}
-    executed_code = planner_output.get("pandas_query") or "df.head()  # Phase 2 stub query"
+    pandas_query = planner_output.get("pandas_query")
+    selected_file_path = state.get("selected_file_path")
 
-    execution_result: dict[str, Any] = {
-        "success": True,
-        "attempts": attempts,
-        "raw_result": [{"message": "Phase 2 stub execution result"}],
-        "executed_code": executed_code,
-        "error": None,
-    }
+    if not selected_file_path:
+        raise ValueError("code_executor requires selected_file_path from query_planner.")
+    if not pandas_query or not str(pandas_query).strip():
+        raise ValueError("code_executor requires planner_output.pandas_query.")
+
+    tool_result = run_query_data(selected_file_path, str(pandas_query))
+    success = tool_result.get("status") == "success"
+
+    if success:
+        execution_result: dict[str, Any] = {
+            "success": True,
+            "attempts": attempts,
+            "raw_result": tool_result.get("result"),
+            "executed_code": tool_result.get("executed_code"),
+            "error": None,
+        }
+    else:
+        execution_result = {
+            "success": False,
+            "attempts": attempts,
+            "raw_result": None,
+            "executed_code": tool_result.get("executed_code"),
+            "error": tool_result.get("error", "Pandas execution failed."),
+        }
 
     return {
         "status": "executing",
@@ -45,7 +60,8 @@ def code_executor_node(state: WorkflowState) -> dict[str, Any]:
                 state,
                 "code_executor",
                 attempts=attempts,
-                success=True,
+                success=success,
+                error=execution_result.get("error"),
             ),
         },
     }
