@@ -2,7 +2,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.graph.state import WorkflowState
-from app.graph.validation import parse_pandas_response, require_successful_dataset_summary
+from app.graph.validation import (
+    parse_pandas_response,
+    require_failed_execution,
+    require_pandas_query,
+    require_successful_dataset_summary,
+)
 from app.llm.openai_client import call_llm_json
 from app.rag.prompts import (
     FIX_PANDAS_QUERY_SYSTEM_PROMPT,
@@ -31,13 +36,8 @@ async def fix_pandas_query_node(state: WorkflowState) -> dict[str, Any]:
         planner_output.get("dataset_summary")
     )
 
-    failed_query = planner_output.get("pandas_query")
-    if not failed_query or not str(failed_query).strip():
-        raise ValueError("fix_pandas_query requires planner_output.pandas_query.")
-
-    error_message = execution_result.get("error")
-    if not error_message:
-        raise ValueError("fix_pandas_query requires execution_result.error.")
+    failed_query = require_pandas_query(planner_output)
+    error_message = require_failed_execution(execution_result)
 
     user_question = state.get("user_question", "").strip()
     if not user_question:
@@ -46,8 +46,8 @@ async def fix_pandas_query_node(state: WorkflowState) -> dict[str, Any]:
     user_prompt = build_fix_pandas_query_user_prompt(
         user_question=user_question,
         dataset_summary=dataset_summary,
-        failed_query=str(failed_query),
-        error_message=str(error_message),
+        failed_query=failed_query,
+        error_message=error_message,
     )
     try:
         llm_response = await call_llm_json(
@@ -58,7 +58,10 @@ async def fix_pandas_query_node(state: WorkflowState) -> dict[str, Any]:
     except ValueError as exc:
         raise ValueError(f"Pandas fix LLM call failed: {exc}") from exc
 
-    fixed_query = parse_pandas_response(llm_response, dataset_summary)
+    try:
+        fixed_query = parse_pandas_response(llm_response, dataset_summary)
+    except ValueError as exc:
+        raise ValueError(f"Pandas fix response validation failed: {exc}") from exc
 
     planner_output["pandas_query"] = fixed_query
     planner_output["queries"] = list(planner_output.get("queries") or [])

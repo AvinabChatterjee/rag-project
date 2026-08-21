@@ -1,4 +1,4 @@
-"""Validation helpers for Agent 1 (Query Planner) nodes."""
+"""Validation helpers for Agent 1 (Query Planner) and Agent 2 nodes."""
 
 from __future__ import annotations
 
@@ -148,3 +148,37 @@ def require_successful_dataset_summary(dataset_summary: dict[str, Any] | None) -
         error = dataset_summary.get("error", "Dataset inspection failed.")
         raise ValueError(f"Cannot generate Pandas query: {error}")
     return dataset_summary
+
+
+def require_selected_file_path(selected_file_path: str | None) -> str:
+    if not selected_file_path:
+        raise ValueError("code_executor requires selected_file_path from query_planner.")
+    return selected_file_path
+
+
+def require_pandas_query(planner_output: dict[str, Any] | None) -> str:
+    planner_output = planner_output or {}
+    pandas_query = planner_output.get("pandas_query")
+    if not pandas_query or not str(pandas_query).strip():
+        raise ValueError("code_executor requires planner_output.pandas_query.")
+    return str(pandas_query).strip()
+
+
+def require_failed_execution(execution_result: dict[str, Any] | None) -> str:
+    execution_result = execution_result or {}
+    if execution_result.get("success"):
+        raise ValueError("fix_pandas_query requires a failed execution_result.")
+    error_message = execution_result.get("error")
+    if not error_message:
+        raise ValueError("fix_pandas_query requires execution_result.error.")
+    return str(error_message)
+
+
+def build_execution_error_message(
+    execution_error: str,
+    dataset_summary: dict[str, Any] | None,
+) -> str:
+    columns = sorted(get_dataset_columns(dataset_summary or {}))
+    if columns:
+        return f"{execution_error} Available columns: {', '.join(columns)}."
+    return execution_error

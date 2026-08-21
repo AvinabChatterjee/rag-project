@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.graph.state import WorkflowState
+from app.graph.validation import require_pandas_query, require_selected_file_path
 from app.tools.dataframe_tools import run_query_data
 
 
@@ -21,16 +22,13 @@ def _append_trace(state: WorkflowState, node: str, **extra: Any) -> list[dict[st
 def code_executor_node(state: WorkflowState) -> dict[str, Any]:
     """Agent 2 — execute generated Pandas code on the selected tabular file."""
     attempts = state.get("execution_attempts", 0) + 1
+    max_attempts = state.get("max_execution_attempts", 2)
     planner_output = state.get("planner_output") or {}
-    pandas_query = planner_output.get("pandas_query")
-    selected_file_path = state.get("selected_file_path")
 
-    if not selected_file_path:
-        raise ValueError("code_executor requires selected_file_path from query_planner.")
-    if not pandas_query or not str(pandas_query).strip():
-        raise ValueError("code_executor requires planner_output.pandas_query.")
+    selected_file_path = require_selected_file_path(state.get("selected_file_path"))
+    pandas_query = require_pandas_query(planner_output)
 
-    tool_result = run_query_data(selected_file_path, str(pandas_query))
+    tool_result = run_query_data(selected_file_path, pandas_query)
     success = tool_result.get("status") == "success"
 
     if success:
@@ -41,6 +39,7 @@ def code_executor_node(state: WorkflowState) -> dict[str, Any]:
             "executed_code": tool_result.get("executed_code"),
             "error": None,
         }
+        status = "executing"
     else:
         execution_result = {
             "success": False,
@@ -49,9 +48,10 @@ def code_executor_node(state: WorkflowState) -> dict[str, Any]:
             "executed_code": tool_result.get("executed_code"),
             "error": tool_result.get("error", "Pandas execution failed."),
         }
+        status = "failed" if attempts >= max_attempts else "executing"
 
     return {
-        "status": "executing",
+        "status": status,
         "execution_attempts": attempts,
         "execution_result": execution_result,
         "metadata": {

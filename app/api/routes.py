@@ -46,6 +46,14 @@ class AnalystOutput(BaseModel):
     confidence: str | None = None
 
 
+class ExecutionResult(BaseModel):
+    success: bool
+    attempts: int | None = None
+    raw_result: object | None = None
+    executed_code: str | None = None
+    error: str | None = None
+
+
 class AskResponse(BaseModel):
     workflow_id: str
     status: str
@@ -56,6 +64,7 @@ class AskResponse(BaseModel):
     selected_file_path: str | None = None
     answer: str | None = None
     error: str | None = None
+    execution_result: ExecutionResult | None = None
     analyst_output: AnalystOutput | None = None
     message: str
 
@@ -109,6 +118,10 @@ async def ask(request: AskRequest) -> AskResponse:
 
     analyst_raw = final_state.get("analyst_output") or {}
     analyst_output = AnalystOutput(**analyst_raw) if analyst_raw else None
+    execution_raw = final_state.get("execution_result") or {}
+    execution_result = (
+        ExecutionResult(**execution_raw) if execution_raw else None
+    )
 
     return AskResponse(
         workflow_id=final_state["workflow_id"],
@@ -120,9 +133,9 @@ async def ask(request: AskRequest) -> AskResponse:
         selected_file_path=final_state.get("selected_file_path"),
         answer=analyst_raw.get("final_answer"),
         error=analyst_raw.get("error_message"),
+        execution_result=execution_result,
         analyst_output=analyst_output,
         message=(
-            f"Workflow completed via {final_state.get('route', 'unknown')} route "
-            "(Phase 2 stubs)."
+            f"Workflow completed via {final_state.get('route', 'unknown')} route."
         ),
     )

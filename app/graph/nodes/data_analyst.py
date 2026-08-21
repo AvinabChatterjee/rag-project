@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from app.graph.state import WorkflowState
+from app.graph.validation import build_execution_error_message
 
 Confidence = Literal["high", "medium", "low"]
 
@@ -31,9 +32,14 @@ def _build_stub_answer(state: WorkflowState) -> tuple[str, str | None, Confidenc
                 None,
                 "medium",
             )
+        planner_output = state.get("planner_output") or {}
+        error_message = build_execution_error_message(
+            execution_result.get("error") or "Execution failed.",
+            planner_output.get("dataset_summary"),
+        )
         return (
             "Phase 2 stub analyst message: tabular execution failed.",
-            execution_result.get("error") or "Execution failed.",
+            error_message,
             "low",
         )
 
