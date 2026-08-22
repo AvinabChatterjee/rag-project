@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from app.config import get_settings
 
@@ -85,6 +85,22 @@ async def call_llm_json(
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"LLM returned invalid JSON: {text[:500]}") from exc
+
+
+def get_embeddings_model() -> OpenAIEmbeddings:
+    settings = get_settings()
+    return OpenAIEmbeddings(
+        model=settings.openai_embedding_model,
+        api_key=require_api_key(),
+    )
+
+
+async def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Embed a batch of texts with the configured OpenAI embedding model."""
+    if not texts:
+        return []
+    embeddings = get_embeddings_model()
+    return await embeddings.aembed_documents(texts)
 
 
 async def verify_openai_connection() -> dict[str, Any]:

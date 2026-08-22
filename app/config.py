@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     semantic_cache_threshold: float = 0.92
     semantic_cache_ttl_hours: int = 24
 
+    chroma_collection_name: str = "documents"
+    chunk_size_tokens: int = 600
+    chunk_overlap_tokens: int = 75
+
     def default_data_folder(self) -> Path:
         return (self.data_dir / "company_data").resolve()
 

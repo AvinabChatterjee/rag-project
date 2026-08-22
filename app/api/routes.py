@@ -4,7 +4,8 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.graph.workflow import rag_graph
 from app.llm.openai_client import verify_openai_connection
-from app.utils.file_utils import detect_file_type, save_upload
+from app.rag.ingest import ingest_document
+from app.utils.file_utils import detect_file_type, save_upload, validate_local_file
 
 router = APIRouter()
 
@@ -24,6 +25,15 @@ class UploadResponse(BaseModel):
     file_path: str
     file_type: str
     filename: str
+
+
+class IngestRequest(BaseModel):
+    file_path: str = Field(..., min_length=1)
+
+
+class IngestResponse(BaseModel):
+    file_path: str
+    chunks_indexed: int
 
 
 class AvailableFile(BaseModel):
@@ -97,6 +107,20 @@ async def upload(file: UploadFile = File(...)) -> UploadResponse:
         file_path=str(saved_path),
         file_type=file_type,
         filename=saved_path.name,
+    )
+
+
+@router.post("/ingest", response_model=IngestResponse)
+async def ingest(request: IngestRequest) -> IngestResponse:
+    try:
+        chunks_indexed = await ingest_document(request.file_path)
+        resolved_path = str(validate_local_file(request.file_path).resolve())
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return IngestResponse(
+        file_path=resolved_path,
+        chunks_indexed=chunks_indexed,
     )
 
 
