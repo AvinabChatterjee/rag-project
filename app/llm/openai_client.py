@@ -103,6 +103,12 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     return await embeddings.aembed_documents(texts)
 
 
+async def embed_text(text: str) -> list[float]:
+    """Embed a single text with the configured OpenAI embedding model."""
+    embeddings = await embed_texts([text])
+    return embeddings[0]
+
+
 async def verify_openai_connection() -> dict[str, Any]:
     """Minimal API call to confirm the key and model work."""
     settings = get_settings()
