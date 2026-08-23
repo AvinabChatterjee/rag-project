@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     chroma_collection_name: str = "documents"
     chunk_size_tokens: int = 600
     chunk_overlap_tokens: int = 75
+    retriever_top_k: int = 10
 
     def default_data_folder(self) -> Path:
         return (self.data_dir / "company_data").resolve()
