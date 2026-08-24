@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     chunk_size_tokens: int = 600
     chunk_overlap_tokens: int = 75
     retriever_top_k: int = 10
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_top_k: int = 5
 
     def default_data_folder(self) -> Path:
         return (self.data_dir / "company_data").resolve()
