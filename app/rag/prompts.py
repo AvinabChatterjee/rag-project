@@ -67,6 +67,11 @@ Rules:
 - If multiple lines are needed, use assignments then a final expression on the last line
 """
 
+DOCUMENT_ANSWER_SYSTEM_PROMPT = (
+    'Answer only from the provided context. If the answer is not in the context, '
+    'say "I don\'t know."'
+)
+
 
 def build_query_planner_user_prompt(
     user_question: str,
@@ -106,3 +111,16 @@ def build_fix_pandas_query_user_prompt(
         f"Execution error:\n{error_message}\n\n"
         "Return a corrected Pandas query."
     )
+
+
+def build_document_answer_user_prompt(
+    user_question: str,
+    chunks: list[dict[str, Any]],
+) -> str:
+    context_blocks = [
+        str(chunk.get("text") or "").strip()
+        for chunk in chunks
+        if str(chunk.get("text") or "").strip()
+    ]
+    context = "\n\n".join(context_blocks) if context_blocks else "(no context provided)"
+    return f"Context:\n{context}\n\nUser Query: {user_question}"
