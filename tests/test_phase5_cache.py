@@ -191,6 +191,73 @@ class Phase5CacheTests(unittest.TestCase):
             "plastics policy requirements",
         )
 
+    def test_cache_store_node_persists_answer(self) -> None:
+        from app.graph.nodes.cache_store import cache_store_node
+
+        file_path = Path(self.temp_dir.name) / "policy.pdf"
+        file_path.write_bytes(b"%PDF-1.4\n")
+        embedding = [1.0, 0.0, 0.0]
+        state = {
+            "cache_hit": False,
+            "selected_file_path": str(file_path.resolve()),
+            "planner_output": {"retrieval_query": "plastics policy requirements"},
+            "retrieval_result": {
+                "query_text": "plastics policy requirements",
+                "query_embedding": embedding,
+                "llm_answer": "All plastics must be recyclable by 2026.",
+            },
+            "metadata": {"agent_trace": []},
+        }
+
+        result = cache_store_node(state)
+
+        self.assertTrue(result["metadata"]["agent_trace"][-1]["stored"])
+        hit, answer, score = cache_module.lookup_semantic_cache(file_path, embedding)
+        self.assertTrue(hit)
+        self.assertEqual(answer, "All plastics must be recyclable by 2026.")
+        self.assertAlmostEqual(score or 0.0, 1.0)
+
+    def test_cache_store_node_skips_cache_hit(self) -> None:
+        from app.graph.nodes.cache_store import cache_store_node
+
+        state = {
+            "cache_hit": True,
+            "selected_file_path": "C:/tmp/policy.pdf",
+            "retrieval_result": {
+                "query_text": "plastics policy requirements",
+                "query_embedding": [1.0, 0.0, 0.0],
+                "llm_answer": "Cached answer.",
+            },
+            "metadata": {"agent_trace": []},
+        }
+
+        result = cache_store_node(state)
+
+        trace_entry = result["metadata"]["agent_trace"][-1]
+        self.assertFalse(trace_entry["stored"])
+        self.assertEqual(trace_entry["skip_reason"], "cache_hit")
+
+    def test_cache_store_node_skips_i_dont_know(self) -> None:
+        from app.graph.nodes.cache_store import cache_store_node
+
+        file_path = Path(self.temp_dir.name) / "policy.pdf"
+        state = {
+            "cache_hit": False,
+            "selected_file_path": str(file_path.resolve()),
+            "retrieval_result": {
+                "query_text": "plastics policy requirements",
+                "query_embedding": [1.0, 0.0, 0.0],
+                "llm_answer": "I don't know.",
+            },
+            "metadata": {"agent_trace": []},
+        }
+
+        result = cache_store_node(state)
+
+        trace_entry = result["metadata"]["agent_trace"][-1]
+        self.assertFalse(trace_entry["stored"])
+        self.assertEqual(trace_entry["skip_reason"], "non_cacheable_answer")
+
 
 if __name__ == "__main__":
     unittest.main()
