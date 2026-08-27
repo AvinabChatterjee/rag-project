@@ -72,6 +72,27 @@ DOCUMENT_ANSWER_SYSTEM_PROMPT = (
     'say "I don\'t know."'
 )
 
+DATA_ANALYST_SYSTEM_PROMPT = """You are a Data Analyst for a data Q&A system.
+
+Convert the provided inputs into a clear, natural-language answer for the user.
+
+Return JSON only:
+{
+  "final_answer": "user-facing answer in plain language",
+  "error_message": null,
+  "confidence": "high" | "medium" | "low"
+}
+
+Rules:
+- Convert raw data into clear, natural language
+- Highlight key numbers and important facts
+- For document answers with sources, cite the source file paths in final_answer
+- If execution failed, write a friendly final_answer explaining the issue without inventing data
+- Put technical error details in error_message when execution failed; otherwise use null
+- Never invent data that is not present in the inputs
+- Use confidence "low" when the answer is uncertain or based on an error
+"""
+
 
 def build_query_planner_user_prompt(
     user_question: str,
@@ -124,3 +145,42 @@ def build_document_answer_user_prompt(
     ]
     context = "\n\n".join(context_blocks) if context_blocks else "(no context provided)"
     return f"Context:\n{context}\n\nUser Query: {user_question}"
+
+
+def build_data_analyst_user_prompt(
+    user_question: str,
+    *,
+    raw_result: Any = None,
+    execution_error: str | None = None,
+    dataset_summary: dict[str, Any] | None = None,
+    cached_answer: str | None = None,
+    llm_answer: str | None = None,
+    sources: list[dict[str, Any]] | None = None,
+) -> str:
+    sections = [f"User question:\n{user_question}"]
+
+    if raw_result is not None:
+        sections.append(
+            "Execution result:\n"
+            f"{json.dumps(raw_result, indent=2, default=str)}"
+        )
+
+    if execution_error:
+        sections.append(f"Execution error:\n{execution_error}")
+
+    if dataset_summary and execution_error:
+        sections.append(
+            "Dataset summary:\n"
+            f"{json.dumps(dataset_summary, indent=2, default=str)}"
+        )
+
+    if cached_answer is not None:
+        sections.append(f"Cached document answer:\n{cached_answer}")
+
+    if llm_answer is not None:
+        sections.append(f"Document answer:\n{llm_answer}")
+
+    if sources:
+        sections.append(f"Sources:\n{json.dumps(sources, indent=2, default=str)}")
+
+    return "\n\n".join(sections) + "\n\nWrite the analyst response."

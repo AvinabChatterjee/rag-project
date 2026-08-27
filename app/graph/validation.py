@@ -182,3 +182,27 @@ def build_execution_error_message(
     if columns:
         return f"{execution_error} Available columns: {', '.join(columns)}."
     return execution_error
+
+
+def parse_analyst_response(response: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(response, dict):
+        raise ValueError("LLM analyst response must be a JSON object.")
+
+    final_answer = response.get("final_answer")
+    if not final_answer or not str(final_answer).strip():
+        raise ValueError("LLM analyst response missing non-empty 'final_answer'.")
+
+    confidence = response.get("confidence")
+    if confidence not in ("high", "medium", "low"):
+        confidence = "medium"
+
+    error_message = response.get("error_message")
+    if error_message is not None:
+        normalized_error = str(error_message).strip()
+        error_message = normalized_error or None
+
+    return {
+        "final_answer": str(final_answer).strip(),
+        "error_message": error_message,
+        "confidence": confidence,
+    }

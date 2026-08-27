@@ -1,6 +1,8 @@
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from app.graph.nodes.code_executor import code_executor_node
 from app.graph.nodes.data_analyst import data_analyst_node
@@ -62,22 +64,35 @@ class Phase4ErrorHandlingTests(unittest.TestCase):
         self.assertIsNotNone(result["execution_result"]["error"])
 
     def test_data_analyst_forwards_execution_error_with_columns(self) -> None:
-        result = data_analyst_node(
-            {
-                "route": "tabular",
-                "execution_result": {
-                    "success": False,
-                    "error": "KeyError: 'Region'",
-                },
-                "planner_output": {
-                    "dataset_summary": {
-                        "status": "success",
-                        "dtypes": {"region": "object", "revenue": "int64"},
+        with patch(
+            "app.graph.nodes.data_analyst.call_llm_json",
+            new=AsyncMock(
+                return_value={
+                    "final_answer": "I could not run that query on the dataset.",
+                    "error_message": None,
+                    "confidence": "low",
+                }
+            ),
+        ):
+            result = asyncio.run(
+                data_analyst_node(
+                    {
+                        "user_question": "What is total revenue?",
+                        "route": "tabular",
+                        "execution_result": {
+                            "success": False,
+                            "error": "KeyError: 'Region'",
+                        },
+                        "planner_output": {
+                            "dataset_summary": {
+                                "status": "success",
+                                "dtypes": {"region": "object", "revenue": "int64"},
+                            }
+                        },
+                        "metadata": {"agent_trace": []},
                     }
-                },
-                "metadata": {"agent_trace": []},
-            }
-        )
+                )
+            )
 
         self.assertIn("Available columns: region, revenue", result["analyst_output"]["error_message"])
 
