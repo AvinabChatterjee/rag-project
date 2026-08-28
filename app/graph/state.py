@@ -15,6 +15,15 @@ WorkflowStatus = Literal[
 
 Route = Literal["tabular", "document"]
 FileType = Literal["csv", "excel", "document"]
+Confidence = Literal["high", "medium", "low"]
+
+
+class AnalystOutput(TypedDict):
+    """Structured output from Agent 3 (Data Analyst)."""
+
+    final_answer: str
+    error_message: str | None
+    confidence: Confidence
 
 
 class WorkflowState(TypedDict, total=False):
@@ -53,7 +62,7 @@ class WorkflowState(TypedDict, total=False):
     cache_hit: bool
 
     # --- Set by Agent 3 (Data Analyst) in Phase 6+ ---
-    analyst_output: dict[str, Any] | None
+    analyst_output: AnalystOutput | None
 
     # --- Trace, timings, model info ---
     metadata: dict[str, Any]

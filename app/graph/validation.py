@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-from app.graph.state import Route, WorkflowState
+from app.graph.state import Route, WorkflowState, AnalystOutput, Confidence
 
 _TABULAR_TYPES = frozenset({"csv", "excel"})
 _FORBIDDEN_PANDAS_PATTERNS = (
@@ -257,7 +257,7 @@ def finalize_analyst_output(
     scenario: AnalystScenario,
     sources: list[dict[str, Any]] | None = None,
     preset_error_message: str | None = None,
-) -> dict[str, Any]:
+) -> AnalystOutput:
     """Apply Phase 6.2 analyst rules after the LLM response is parsed."""
     finalized = dict(analyst_output)
 
@@ -278,10 +278,42 @@ def finalize_analyst_output(
     if scenario == "document_fallback":
         finalized["confidence"] = "low"
 
-    return finalized
+    return normalize_analyst_output(finalized)
 
 
-def parse_analyst_response(response: dict[str, Any]) -> dict[str, Any]:
+_VALID_CONFIDENCE: frozenset[str] = frozenset({"high", "medium", "low"})
+_ANALYST_OUTPUT_KEYS = frozenset({"final_answer", "error_message", "confidence"})
+
+
+def normalize_analyst_output(output: dict[str, Any]) -> AnalystOutput:
+    """Normalize analyst output to the Phase 6.3 schema."""
+    extra_keys = set(output.keys()) - _ANALYST_OUTPUT_KEYS
+    if extra_keys:
+        raise ValueError(
+            f"analyst_output contains unexpected keys: {sorted(extra_keys)}"
+        )
+
+    final_answer = str(output.get("final_answer", "")).strip()
+    if not final_answer:
+        raise ValueError("analyst_output requires non-empty 'final_answer'.")
+
+    confidence = output.get("confidence")
+    if confidence not in _VALID_CONFIDENCE:
+        confidence = "medium"
+
+    error_message = output.get("error_message")
+    if error_message is not None:
+        normalized_error = str(error_message).strip()
+        error_message = normalized_error or None
+
+    return {
+        "final_answer": final_answer,
+        "error_message": error_message,
+        "confidence": confidence,  # type: ignore[typeddict-item]
+    }
+
+
+def parse_analyst_response(response: dict[str, Any]) -> AnalystOutput:
     if not isinstance(response, dict):
         raise ValueError("LLM analyst response must be a JSON object.")
 
@@ -298,8 +330,10 @@ def parse_analyst_response(response: dict[str, Any]) -> dict[str, Any]:
         normalized_error = str(error_message).strip()
         error_message = normalized_error or None
 
-    return {
-        "final_answer": str(final_answer).strip(),
-        "error_message": error_message,
-        "confidence": confidence,
-    }
+    return normalize_analyst_output(
+        {
+            "final_answer": str(final_answer).strip(),
+            "error_message": error_message,
+            "confidence": confidence,
+        }
+    )

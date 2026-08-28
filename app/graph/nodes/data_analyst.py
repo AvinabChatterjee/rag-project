@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
 from app.graph.state import WorkflowState
 from app.graph.validation import (
@@ -12,7 +12,6 @@ from app.graph.validation import (
 from app.llm.openai_client import call_llm_json
 from app.rag.prompts import DATA_ANALYST_SYSTEM_PROMPT, build_data_analyst_user_prompt
 
-Confidence = Literal["high", "medium", "low"]
 _ANALYST_TEMPERATURE = 0.3
 
 

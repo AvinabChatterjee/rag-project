@@ -7,6 +7,7 @@ from app.graph.validation import (
     ensure_friendly_error_answer,
     ensure_source_citations,
     finalize_analyst_output,
+    normalize_analyst_output,
 )
 from app.rag.prompts import build_data_analyst_user_prompt
 
@@ -75,6 +76,68 @@ class Phase6AnalystTests(unittest.TestCase):
         self.assertEqual(finalized["confidence"], "low")
         self.assertIn("Available columns: region, revenue", finalized["error_message"])
         self.assertNotIn("KeyError", finalized["final_answer"])
+
+    def test_normalize_analyst_output_enforces_schema(self) -> None:
+        normalized = normalize_analyst_output(
+            {
+                "final_answer": "North leads with $120,000 in revenue.",
+                "error_message": None,
+                "confidence": "high",
+            }
+        )
+
+        self.assertEqual(set(normalized.keys()), {"final_answer", "error_message", "confidence"})
+        self.assertEqual(normalized["final_answer"], "North leads with $120,000 in revenue.")
+        self.assertIsNone(normalized["error_message"])
+        self.assertEqual(normalized["confidence"], "high")
+
+    def test_normalize_analyst_output_rejects_extra_keys(self) -> None:
+        with self.assertRaises(ValueError):
+            normalize_analyst_output(
+                {
+                    "final_answer": "Answer",
+                    "error_message": None,
+                    "confidence": "medium",
+                    "route": "tabular",
+                }
+            )
+
+    def test_normalize_analyst_output_defaults_invalid_confidence(self) -> None:
+        normalized = normalize_analyst_output(
+            {
+                "final_answer": "Answer",
+                "error_message": None,
+                "confidence": "unknown",
+            }
+        )
+
+        self.assertEqual(normalized["confidence"], "medium")
+
+    def test_data_analyst_node_sets_completed_status_and_schema(self) -> None:
+        state = {
+            "user_question": "What is total revenue?",
+            "route": "tabular",
+            "execution_result": {"success": True, "raw_result": 300},
+            "metadata": {"agent_trace": []},
+        }
+
+        with patch(
+            "app.graph.nodes.data_analyst.call_llm_json",
+            new=AsyncMock(
+                return_value={
+                    "final_answer": "Total revenue is 300.",
+                    "error_message": None,
+                    "confidence": "high",
+                }
+            ),
+        ):
+            result = asyncio.run(data_analyst_node(state))
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            set(result["analyst_output"].keys()),
+            {"final_answer", "error_message", "confidence"},
+        )
 
     def test_data_analyst_node_tabular_success(self) -> None:
         state = {

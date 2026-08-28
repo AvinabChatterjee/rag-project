@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -51,9 +53,9 @@ class AskRequest(BaseModel):
 
 
 class AnalystOutput(BaseModel):
-    final_answer: str | None = None
+    final_answer: str
     error_message: str | None = None
-    confidence: str | None = None
+    confidence: Literal["high", "medium", "low"]
 
 
 class ExecutionResult(BaseModel):
