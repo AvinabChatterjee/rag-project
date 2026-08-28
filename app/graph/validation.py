@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from app.graph.state import Route
+from app.graph.state import Route, WorkflowState
 
 _TABULAR_TYPES = frozenset({"csv", "excel"})
 _FORBIDDEN_PANDAS_PATTERNS = (
@@ -182,6 +182,103 @@ def build_execution_error_message(
     if columns:
         return f"{execution_error} Available columns: {', '.join(columns)}."
     return execution_error
+
+
+AnalystScenario = Literal[
+    "tabular_success",
+    "tabular_failure",
+    "document_cache_hit",
+    "document_cache_miss",
+    "document_fallback",
+]
+
+_TECHNICAL_ERROR_MARKERS = (
+    "traceback",
+    "keyerror",
+    "attributeerror",
+    "valueerror:",
+    "typeerror:",
+)
+
+
+def determine_analyst_scenario(state: WorkflowState) -> AnalystScenario:
+    route = state.get("route")
+    execution_result = state.get("execution_result") or {}
+    retrieval_result = state.get("retrieval_result") or {}
+
+    if route == "tabular":
+        if execution_result.get("success"):
+            return "tabular_success"
+        return "tabular_failure"
+
+    if state.get("cache_hit") and retrieval_result.get("cached_answer"):
+        return "document_cache_hit"
+
+    if retrieval_result.get("llm_answer"):
+        return "document_cache_miss"
+
+    return "document_fallback"
+
+
+def ensure_source_citations(
+    final_answer: str,
+    sources: list[dict[str, Any]],
+) -> str:
+    file_paths = [
+        str(source["file_path"])
+        for source in sources
+        if source.get("file_path")
+    ]
+    if not file_paths:
+        return final_answer.strip()
+
+    normalized_answer = final_answer.strip()
+    if any(path in normalized_answer for path in file_paths):
+        return normalized_answer
+
+    if len(file_paths) == 1:
+        return f"{normalized_answer} (Source: {file_paths[0]})"
+    return f"{normalized_answer} (Sources: {', '.join(file_paths)})"
+
+
+def ensure_friendly_error_answer(final_answer: str) -> str:
+    lowered = final_answer.lower()
+    if any(marker in lowered for marker in _TECHNICAL_ERROR_MARKERS):
+        return (
+            "I couldn't complete that analysis on the dataset. "
+            "Please try rephrasing your question using the available columns."
+        )
+    return final_answer
+
+
+def finalize_analyst_output(
+    analyst_output: dict[str, Any],
+    *,
+    scenario: AnalystScenario,
+    sources: list[dict[str, Any]] | None = None,
+    preset_error_message: str | None = None,
+) -> dict[str, Any]:
+    """Apply Phase 6.2 analyst rules after the LLM response is parsed."""
+    finalized = dict(analyst_output)
+
+    if scenario == "tabular_failure":
+        finalized["final_answer"] = ensure_friendly_error_answer(
+            str(finalized["final_answer"])
+        )
+        finalized["confidence"] = "low"
+        if preset_error_message is not None:
+            finalized["error_message"] = preset_error_message
+
+    if scenario == "document_cache_miss" and sources:
+        finalized["final_answer"] = ensure_source_citations(
+            str(finalized["final_answer"]),
+            sources,
+        )
+
+    if scenario == "document_fallback":
+        finalized["confidence"] = "low"
+
+    return finalized
 
 
 def parse_analyst_response(response: dict[str, Any]) -> dict[str, Any]:

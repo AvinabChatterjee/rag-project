@@ -93,6 +93,38 @@ Rules:
 - Use confidence "low" when the answer is uncertain or based on an error
 """
 
+_ANALYST_SCENARIO_INSTRUCTIONS: dict[str, str] = {
+    "tabular_success": (
+        "Instructions:\n"
+        "- Summarize the execution result in clear, natural language\n"
+        "- Highlight key numbers, totals, and comparisons prominently\n"
+        "- Use only values present in the execution result; never invent data"
+    ),
+    "tabular_failure": (
+        "Instructions:\n"
+        "- Write a friendly final_answer explaining the analysis could not be completed\n"
+        "- Do not include raw stack traces or technical jargon in final_answer\n"
+        "- Do not invent data or guess column values\n"
+        "- Put technical error details in error_message"
+    ),
+    "document_cache_hit": (
+        "Instructions:\n"
+        "- Rephrase the cached document answer clearly for the user\n"
+        "- Do not add facts beyond the cached answer"
+    ),
+    "document_cache_miss": (
+        "Instructions:\n"
+        "- Present the document answer clearly in natural language\n"
+        "- Cite every source file path in final_answer\n"
+        "- Do not invent information beyond the document answer and sources"
+    ),
+    "document_fallback": (
+        "Instructions:\n"
+        "- Explain that there is not enough information to answer the question\n"
+        "- Do not invent data"
+    ),
+}
+
 
 def build_query_planner_user_prompt(
     user_question: str,
@@ -150,6 +182,7 @@ def build_document_answer_user_prompt(
 def build_data_analyst_user_prompt(
     user_question: str,
     *,
+    scenario: str | None = None,
     raw_result: Any = None,
     execution_error: str | None = None,
     dataset_summary: dict[str, Any] | None = None,
@@ -182,5 +215,8 @@ def build_data_analyst_user_prompt(
 
     if sources:
         sections.append(f"Sources:\n{json.dumps(sources, indent=2, default=str)}")
+
+    if scenario and scenario in _ANALYST_SCENARIO_INSTRUCTIONS:
+        sections.append(_ANALYST_SCENARIO_INSTRUCTIONS[scenario])
 
     return "\n\n".join(sections) + "\n\nWrite the analyst response."
