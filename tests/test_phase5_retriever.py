@@ -106,7 +106,15 @@ class Phase5RetrieverTests(unittest.TestCase):
             ),
             patch(
                 "app.graph.nodes.retriever.retrieve_chunks",
-                return_value=[],
+                return_value=[
+                    {
+                        "chunk_id": "chunk-1",
+                        "text": "Policy excerpt.",
+                        "score": 0.9,
+                        "file_path": "C:/tmp/policy.pdf",
+                        "chunk_index": 0,
+                    }
+                ],
             ) as mock_retrieve,
         ):
             result = asyncio.run(
@@ -122,7 +130,17 @@ class Phase5RetrieverTests(unittest.TestCase):
             [0.0, 1.0, 0.0],
         )
         self.assertEqual(result["retrieval_result"]["query_embedding"], [0.0, 1.0, 0.0])
-        self.assertEqual(result["retrieval_result"]["retrieved_chunks"], [])
+        self.assertEqual(len(result["retrieval_result"]["retrieved_chunks"]), 1)
+
+    def test_retriever_node_requires_ingest_when_no_chunks(self) -> None:
+        with patch(
+            "app.graph.nodes.retriever.retrieve_chunks",
+            return_value=[],
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                asyncio.run(retriever_node(_make_state()))
+
+        self.assertIn("POST /ingest", str(ctx.exception))
 
     def test_ingest_then_retrieve_round_trip(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:

@@ -42,6 +42,11 @@ async def retriever_node(state: WorkflowState) -> dict[str, Any]:
 
     resolved_path = str(Path(selected_file_path).resolve())
     retrieved_chunks = retrieve_chunks(resolved_path, query_embedding)
+    if not retrieved_chunks:
+        raise ValueError(
+            f"No indexed chunks found for '{resolved_path}'. "
+            "Upload the document and call POST /ingest with file_path before asking."
+        )
     retrieval_result["retrieved_chunks"] = retrieved_chunks
 
     return {
