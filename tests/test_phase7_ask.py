@@ -88,10 +88,10 @@ class Phase7AskEndpointTests(unittest.TestCase):
             final_state = _tabular_final_state(folder, csv_path)
 
             with patch(
-                "app.api.routes.rag_graph.ainvoke",
-                new_callable=AsyncMock,
-                return_value=final_state,
-            ) as mock_invoke:
+                "app.api.routes.get_rag_graph",
+            ) as mock_get_graph:
+                mock_graph = mock_get_graph.return_value
+                mock_graph.ainvoke = AsyncMock(return_value=final_state)
                 response = self.client.post(
                     "/ask",
                     json={
@@ -109,11 +109,19 @@ class Phase7AskEndpointTests(unittest.TestCase):
             self.assertTrue(body["execution_result"]["success"])
             self.assertEqual(body["execution_result"]["raw_result"], 300)
             self.assertEqual(body["analyst_output"]["confidence"], "high")
-            mock_invoke.assert_awaited_once_with(
+            mock_graph.ainvoke.assert_awaited_once()
+            invoke_args = mock_graph.ainvoke.await_args
+            self.assertEqual(
+                invoke_args.args[0],
                 {
                     "user_question": "What is the total revenue?",
                     "data_folder": folder,
-                }
+                    "workflow_id": invoke_args.args[0]["workflow_id"],
+                },
+            )
+            self.assertEqual(
+                invoke_args.args[0]["workflow_id"],
+                invoke_args.args[1]["configurable"]["thread_id"],
             )
 
     def test_ask_rejects_empty_data_folder(self) -> None:
@@ -144,11 +152,9 @@ class Phase7AskEndpointTests(unittest.TestCase):
             csv_path = Path(folder) / "sales.csv"
             final_state = _tabular_final_state(folder, csv_path)
 
-            with patch(
-                "app.api.routes.rag_graph.ainvoke",
-                new_callable=AsyncMock,
-                return_value=final_state,
-            ):
+            with patch("app.api.routes.get_rag_graph") as mock_get_graph:
+                mock_graph = mock_get_graph.return_value
+                mock_graph.ainvoke = AsyncMock(return_value=final_state)
                 response = asyncio.run(
                     ask(
                         AskRequest(

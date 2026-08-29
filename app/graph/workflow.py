@@ -1,4 +1,5 @@
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.graph.nodes import (
     cache_lookup_node,
@@ -79,4 +80,21 @@ def build_workflow_graph() -> StateGraph:
     return graph
 
 
-rag_graph = build_workflow_graph().compile()
+rag_graph: CompiledStateGraph = build_workflow_graph().compile()
+_checkpointed_graph: CompiledStateGraph | None = None
+
+
+async def init_workflow_engine() -> None:
+    """Compile the graph with AsyncSqliteSaver for workflow persistence."""
+    global _checkpointed_graph
+    from app.graph.checkpointer import init_checkpointer
+
+    checkpointer = await init_checkpointer()
+    _checkpointed_graph = build_workflow_graph().compile(checkpointer=checkpointer)
+
+
+def get_rag_graph() -> CompiledStateGraph:
+    """Return the checkpointed graph when initialized, else the default graph."""
+    if _checkpointed_graph is not None:
+        return _checkpointed_graph
+    return rag_graph

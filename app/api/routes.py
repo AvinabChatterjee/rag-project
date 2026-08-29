@@ -1,10 +1,11 @@
-from typing import Literal
+from typing import Any, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from app.graph.workflow import rag_graph
+from app.graph.workflow import get_rag_graph
 from app.llm.openai_client import verify_openai_connection
 from app.rag.ingest import ingest_document
 from app.utils.file_utils import detect_file_type, save_upload, validate_local_file
@@ -88,12 +89,30 @@ class AskResponse(BaseModel):
     message: str
 
 
-def build_ask_input_state(question: str, data_folder: str | None = None) -> dict:
+class WorkflowDetailResponse(BaseModel):
+    workflow_id: str
+    status: str | None = None
+    next: list[str] = Field(default_factory=list)
+    state: dict[str, Any]
+
+
+def build_invoke_config(workflow_id: str) -> dict:
+    return {"configurable": {"thread_id": workflow_id}}
+
+
+def build_ask_input_state(
+    question: str,
+    data_folder: str | None = None,
+    *,
+    workflow_id: str | None = None,
+) -> dict:
     user_question = question.strip()
     if not user_question:
         raise ValueError("question is required.")
 
     input_state: dict[str, str] = {"user_question": user_question}
+    if workflow_id is not None:
+        input_state["workflow_id"] = workflow_id
     if data_folder is not None:
         folder = data_folder.strip()
         if not folder:
@@ -189,10 +208,41 @@ async def ingest(request: IngestRequest) -> IngestResponse:
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
+    workflow_id = str(uuid4())
     try:
-        input_state = build_ask_input_state(request.question, request.data_folder)
-        final_state = await rag_graph.ainvoke(input_state)
+        input_state = build_ask_input_state(
+            request.question,
+            request.data_folder,
+            workflow_id=workflow_id,
+        )
+        graph = get_rag_graph()
+        final_state = await graph.ainvoke(
+            input_state,
+            build_invoke_config(workflow_id),
+        )
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return build_ask_response(final_state)
+
+
+@router.get("/workflow/{workflow_id}", response_model=WorkflowDetailResponse)
+async def get_workflow(workflow_id: str) -> WorkflowDetailResponse:
+    normalized_id = workflow_id.strip()
+    if not normalized_id:
+        raise HTTPException(status_code=400, detail="workflow_id is required.")
+
+    snapshot = await get_rag_graph().aget_state(build_invoke_config(normalized_id))
+    state = snapshot.values
+    if not state or not state.get("workflow_id"):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow not found: {normalized_id}",
+        )
+
+    return WorkflowDetailResponse(
+        workflow_id=state["workflow_id"],
+        status=state.get("status"),
+        next=list(snapshot.next or ()),
+        state=state,
+    )

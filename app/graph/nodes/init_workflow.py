@@ -24,6 +24,8 @@ def init_workflow_node(state: WorkflowState) -> dict[str, Any]:
             f"Add .csv, .xlsx, .xls, .pdf, .txt, or .docx files."
         )
 
+    workflow_id = state.get("workflow_id") or str(uuid4())
+
     trace_entry = {
         "node": "init_workflow",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -32,7 +34,7 @@ def init_workflow_node(state: WorkflowState) -> dict[str, Any]:
     }
 
     return {
-        "workflow_id": str(uuid4()),
+        "workflow_id": workflow_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "initialized",
         "data_folder": str(folder),

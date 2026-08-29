@@ -83,11 +83,9 @@ class Phase7DocumentEndpointTests(unittest.TestCase):
             pdf_path.write_bytes(b"%PDF-1.4\n")
             final_state = _document_final_state(folder, pdf_path)
 
-            with patch(
-                "app.api.routes.rag_graph.ainvoke",
-                new_callable=AsyncMock,
-                return_value=final_state,
-            ):
+            with patch("app.api.routes.get_rag_graph") as mock_get_graph:
+                mock_graph = mock_get_graph.return_value
+                mock_graph.ainvoke = AsyncMock(return_value=final_state)
                 response = self.client.post(
                     "/ask",
                     json={
@@ -125,11 +123,9 @@ class Phase7DocumentEndpointTests(unittest.TestCase):
             pdf_path = Path(folder) / "policy.pdf"
             final_state = _document_final_state(folder, pdf_path)
 
-            with patch(
-                "app.api.routes.rag_graph.ainvoke",
-                new_callable=AsyncMock,
-                return_value=final_state,
-            ):
+            with patch("app.api.routes.get_rag_graph") as mock_get_graph:
+                mock_graph = mock_get_graph.return_value
+                mock_graph.ainvoke = AsyncMock(return_value=final_state)
                 response = asyncio.run(
                     ask(
                         AskRequest(

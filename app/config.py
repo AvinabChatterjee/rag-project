@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     upload_dir: Path = PROJECT_ROOT / "data" / "uploads"
     vector_db_dir: Path = PROJECT_ROOT / "data" / "vector_db"
     cache_db_path: Path = PROJECT_ROOT / "data" / "cache.db"
+    workflow_db_path: Path = PROJECT_ROOT / "data" / "workflows.db"
 
     # Default folder scanned for CSV/Excel/PDF when /ask omits data_folder (Option A).
     data_folder: Path | None = None
