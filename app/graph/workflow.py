@@ -93,6 +93,15 @@ async def init_workflow_engine() -> None:
     _checkpointed_graph = build_workflow_graph().compile(checkpointer=checkpointer)
 
 
+async def shutdown_workflow_engine() -> None:
+    """Release the checkpointed graph and SQLite connection."""
+    global _checkpointed_graph
+    _checkpointed_graph = None
+    from app.graph.checkpointer import close_checkpointer
+
+    await close_checkpointer()
+
+
 def get_rag_graph() -> CompiledStateGraph:
     """Return the checkpointed graph when initialized, else the default graph."""
     if _checkpointed_graph is not None:

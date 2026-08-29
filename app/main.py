@@ -4,8 +4,7 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.config import get_settings
-from app.graph.checkpointer import close_checkpointer
-from app.graph.workflow import init_workflow_engine
+from app.graph.workflow import init_workflow_engine, shutdown_workflow_engine
 
 settings = get_settings()
 
@@ -15,7 +14,7 @@ async def lifespan(_: FastAPI):
     settings.ensure_directories()
     await init_workflow_engine()
     yield
-    await close_checkpointer()
+    await shutdown_workflow_engine()
 
 
 app = FastAPI(

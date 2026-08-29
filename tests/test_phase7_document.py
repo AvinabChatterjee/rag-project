@@ -107,13 +107,17 @@ class Phase7DocumentEndpointTests(unittest.TestCase):
             pdf_path = Path(folder) / "policy.pdf"
             pdf_path.write_bytes(b"%PDF-1.4\n")
 
-            response = self.client.post(
-                "/ask",
-                json={
-                    "question": "What is the plastics policy?",
-                    "data_folder": folder,
-                },
-            )
+            with patch(
+                "app.graph.nodes.retriever.retrieve_chunks",
+                return_value=[],
+            ):
+                response = self.client.post(
+                    "/ask",
+                    json={
+                        "question": "What is the plastics policy?",
+                        "data_folder": folder,
+                    },
+                )
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("POST /ingest", response.json()["detail"])
