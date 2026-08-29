@@ -81,6 +81,48 @@ class AskResponse(BaseModel):
     message: str
 
 
+def build_ask_input_state(question: str, data_folder: str | None = None) -> dict:
+    user_question = question.strip()
+    if not user_question:
+        raise ValueError("question is required.")
+
+    input_state: dict[str, str] = {"user_question": user_question}
+    if data_folder is not None:
+        folder = data_folder.strip()
+        if not folder:
+            raise ValueError("data_folder must not be blank when provided.")
+        input_state["data_folder"] = folder
+    return input_state
+
+
+def build_ask_response(final_state: dict) -> AskResponse:
+    available_files = [
+        AvailableFile(**file_info)
+        for file_info in final_state.get("available_files", [])
+    ]
+
+    analyst_raw = final_state.get("analyst_output") or {}
+    analyst_output = AnalystOutput(**analyst_raw) if analyst_raw else None
+    execution_raw = final_state.get("execution_result") or {}
+    execution_result = ExecutionResult(**execution_raw) if execution_raw else None
+    route = final_state.get("route")
+
+    return AskResponse(
+        workflow_id=final_state["workflow_id"],
+        status=final_state["status"],
+        question=final_state["user_question"],
+        data_folder=final_state["data_folder"],
+        available_files=available_files,
+        route=route,
+        selected_file_path=final_state.get("selected_file_path"),
+        answer=analyst_raw.get("final_answer"),
+        error=analyst_raw.get("error_message"),
+        execution_result=execution_result,
+        analyst_output=analyst_output,
+        message=f"Workflow completed via {route or 'unknown'} route.",
+    )
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse()
@@ -134,39 +176,9 @@ async def ingest(request: IngestRequest) -> IngestResponse:
 @router.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
     try:
-        input_state: dict = {"user_question": request.question}
-        if request.data_folder is not None:
-            input_state["data_folder"] = request.data_folder
-
+        input_state = build_ask_input_state(request.question, request.data_folder)
         final_state = await rag_graph.ainvoke(input_state)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    available_files = [
-        AvailableFile(**file_info)
-        for file_info in final_state.get("available_files", [])
-    ]
-
-    analyst_raw = final_state.get("analyst_output") or {}
-    analyst_output = AnalystOutput(**analyst_raw) if analyst_raw else None
-    execution_raw = final_state.get("execution_result") or {}
-    execution_result = (
-        ExecutionResult(**execution_raw) if execution_raw else None
-    )
-
-    return AskResponse(
-        workflow_id=final_state["workflow_id"],
-        status=final_state["status"],
-        question=final_state["user_question"],
-        data_folder=final_state["data_folder"],
-        available_files=available_files,
-        route=final_state.get("route"),
-        selected_file_path=final_state.get("selected_file_path"),
-        answer=analyst_raw.get("final_answer"),
-        error=analyst_raw.get("error_message"),
-        execution_result=execution_result,
-        analyst_output=analyst_output,
-        message=(
-            f"Workflow completed via {final_state.get('route', 'unknown')} route."
-        ),
-    )
+    return build_ask_response(final_state)
