@@ -94,13 +94,14 @@ async def health_llm() -> LlmHealthResponse:
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload(file: UploadFile = File(...)) -> UploadResponse:
-    if not file.filename:
+    filename = (file.filename or "").strip()
+    if not filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
     settings = get_settings()
     try:
         content = await file.read()
-        saved_path = save_upload(content, file.filename, settings.upload_dir)
+        saved_path = save_upload(content, filename, settings.upload_dir)
         file_type = detect_file_type(saved_path)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -114,14 +115,18 @@ async def upload(file: UploadFile = File(...)) -> UploadResponse:
 
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest(request: IngestRequest) -> IngestResponse:
+    file_path = request.file_path.strip()
+    if not file_path:
+        raise HTTPException(status_code=400, detail="file_path is required.")
+
     try:
-        chunks_indexed = await ingest_document(request.file_path)
-        resolved_path = str(validate_local_file(request.file_path).resolve())
+        resolved_path = validate_local_file(file_path)
+        chunks_indexed = await ingest_document(resolved_path)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return IngestResponse(
-        file_path=resolved_path,
+        file_path=str(resolved_path.resolve()),
         chunks_indexed=chunks_indexed,
     )
 
