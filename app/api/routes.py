@@ -66,6 +66,11 @@ class ExecutionResult(BaseModel):
     error: str | None = None
 
 
+class SourceCitation(BaseModel):
+    chunk_id: str
+    file_path: str | None = None
+
+
 class AskResponse(BaseModel):
     workflow_id: str
     status: str
@@ -76,6 +81,8 @@ class AskResponse(BaseModel):
     selected_file_path: str | None = None
     answer: str | None = None
     error: str | None = None
+    cache_hit: bool | None = None
+    sources: list[SourceCitation] = Field(default_factory=list)
     execution_result: ExecutionResult | None = None
     analyst_output: AnalystOutput | None = None
     message: str
@@ -105,7 +112,12 @@ def build_ask_response(final_state: dict) -> AskResponse:
     analyst_output = AnalystOutput(**analyst_raw) if analyst_raw else None
     execution_raw = final_state.get("execution_result") or {}
     execution_result = ExecutionResult(**execution_raw) if execution_raw else None
+    retrieval_raw = final_state.get("retrieval_result") or {}
     route = final_state.get("route")
+    sources = [
+        SourceCitation(**source)
+        for source in retrieval_raw.get("sources") or []
+    ]
 
     return AskResponse(
         workflow_id=final_state["workflow_id"],
@@ -117,6 +129,8 @@ def build_ask_response(final_state: dict) -> AskResponse:
         selected_file_path=final_state.get("selected_file_path"),
         answer=analyst_raw.get("final_answer"),
         error=analyst_raw.get("error_message"),
+        cache_hit=final_state.get("cache_hit"),
+        sources=sources,
         execution_result=execution_result,
         analyst_output=analyst_output,
         message=f"Workflow completed via {route or 'unknown'} route.",

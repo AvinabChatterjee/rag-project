@@ -72,6 +72,14 @@ def _delete_existing_chunks(collection: Collection, file_path: str) -> None:
         collection.delete(ids=existing["ids"])
 
 
+def count_indexed_chunks(file_path: str | Path) -> int:
+    """Return how many Chroma chunks are stored for the resolved file_path."""
+    resolved_path = str(Path(file_path).resolve())
+    collection = get_chroma_collection()
+    existing = collection.get(where={"file_path": resolved_path}, include=[])
+    return len(existing.get("ids") or [])
+
+
 async def ingest_document(file_path: str | Path) -> int:
     """Load, chunk, embed, and store a document in Chroma scoped by file_path."""
     path = validate_local_file(file_path)

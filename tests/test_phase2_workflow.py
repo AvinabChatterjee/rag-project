@@ -2,6 +2,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.api.routes import AskRequest, ask
 from app.graph.workflow import rag_graph
@@ -45,16 +46,29 @@ class Phase2WorkflowTests(unittest.TestCase):
 
   def test_document_stub_path(self) -> None:
     with tempfile.TemporaryDirectory() as folder:
-      Path(folder, "policy.pdf").write_bytes(b"%PDF-1.4\n")
+      pdf_path = Path(folder, "policy.pdf")
+      pdf_path.write_bytes(b"%PDF-1.4\n")
+      fake_chunks = [
+        {
+          "chunk_id": "chunk-1",
+          "text": "Plastics must be recyclable by 2026.",
+          "score": 0.9,
+          "file_path": str(pdf_path.resolve()),
+        }
+      ]
 
-      final_state = asyncio.run(
-        rag_graph.ainvoke(
-          {
-            "user_question": "What is the plastics policy?",
-            "data_folder": folder,
-          }
+      with patch(
+        "app.graph.nodes.retriever.retrieve_chunks",
+        return_value=fake_chunks,
+      ):
+        final_state = asyncio.run(
+          rag_graph.ainvoke(
+            {
+              "user_question": "What is the plastics policy?",
+              "data_folder": folder,
+            }
+          )
         )
-      )
 
     self.assertEqual(final_state["status"], "completed")
     self.assertEqual(final_state["route"], "document")
