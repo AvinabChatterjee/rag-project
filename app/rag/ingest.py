@@ -27,6 +27,40 @@ def get_chroma_collection() -> Collection:
     return client.get_or_create_collection(name=settings.chroma_collection_name)
 
 
+def _collection_embedding_dimension(collection: Collection) -> int | None:
+    sample = collection.get(include=["embeddings"], limit=1)
+    embeddings = sample.get("embeddings")
+    if embeddings is None or len(embeddings) == 0:
+        return None
+    first = embeddings[0]
+    if first is None:
+        return None
+    return len(first)
+
+
+def _recreate_chroma_collection() -> Collection:
+    settings = get_settings()
+    client = get_chroma_client()
+    name = settings.chroma_collection_name
+    try:
+        client.delete_collection(name)
+    except (ValueError, Exception):
+        pass
+    return client.get_or_create_collection(name=name)
+
+
+def _collection_for_embeddings(embeddings: list[list[float]]) -> Collection:
+    if not embeddings:
+        raise ValueError("embeddings must not be empty.")
+
+    expected_dim = len(embeddings[0])
+    collection = get_chroma_collection()
+    current_dim = _collection_embedding_dimension(collection)
+    if current_dim is not None and current_dim != expected_dim:
+        collection = _recreate_chroma_collection()
+    return collection
+
+
 def chunk_text(
     text: str,
     *,
@@ -99,7 +133,7 @@ async def ingest_document(file_path: str | Path) -> int:
 
     embeddings = await embed_texts(chunks)
     resolved_path = str(path.resolve())
-    collection = get_chroma_collection()
+    collection = _collection_for_embeddings(embeddings)
     _delete_existing_chunks(collection, resolved_path)
 
     ids = [f"{resolved_path}::chunk::{index}" for index in range(len(chunks))]
